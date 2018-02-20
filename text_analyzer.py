@@ -1,11 +1,22 @@
 import nltk
-nltk.download('stopwords')
-nltk.download('wordnet')
+import ssl
+#nltk.download('stopwords')
+#nltk.download('wordnet')
 from nltk.corpus import stopwords
 from nltk.corpus import wordnet as wn
 from bs4 import BeautifulSoup
 import re
 
+
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
+
+nltk.download('stopwords')
+nltk.download('wordnet')
 class TextAnalyzer:
   SENTENCE_SPLIT_REGEX = r'[.!?]+'
 
@@ -21,6 +32,7 @@ class TextAnalyzer:
   def fullPass(self):
     self.calculate()
     self.display()
+    self.upgrade()
 
   def calculate(self):
     self.sentenceCount = len(re.split(self.SENTENCE_SPLIT_REGEX, self.initialText))
@@ -44,6 +56,31 @@ class TextAnalyzer:
     print("Classification:\t" + self.__classifyText())
 
 
+  def countSyllablesInWord(word):
+    return len(''.join(c if c in "aeiouy"else' ' for c in word.rstrip('e')).split())
+
+  @staticmethod
+  def upgrade_word(word):
+    maxSyllables = countSyllablesInWord(word)
+    bestCandidate = word
+    tagged = nltk.pos_tag({word})[0]
+    #print ("Word to upgrade:" + word)
+    
+    #make sure there are actually synonym sets
+    if len(wn.synsets(word)) > 0:
+      
+      #iterate across synonyms and return the word with the most synonyms
+      #iterating across the 1st synset since it will tend to contain words closer in meaning
+      for synonym in wn.synsets(word)[0].lemma_names():
+        #tag the possible replacement w/ its part of speech
+        taggedPossible = nltk.pos_tag({synonym})[0]
+        
+        #if the potential replacement has more syllables, and is the exact same part of speech, 
+        #it becomes the best candidate
+        if (countSyllablesInWord(synonym) > maxSyllables) and tagged[1] == taggedPossible[1]:
+          bestCandidate = synonym
+
+    return bestCandidate
 
 
 
@@ -55,9 +92,26 @@ class TextAnalyzer:
     # 3. Find similar words for each of the words to upgrade, making sure the new word has more syllables
     # 4. Profit
 
+    #just counting these for debugging purposes
+    nouns = 0
+    verbs = 0
+    articles = 0
 
-    print("Not implemented")
+    #tag the tokenzid version of the text w/ the POS of each word
+    tagged = nltk.pos_tag(self.tokens)
 
+    #for now, replace only basic nouns and verbs
+    for word in tagged:
+      if 'NN' in word[1]:
+        nouns += 1
+        #replace all instances of the word in the text
+        self.initialText = self.initialText.replace(word[0], self.upgrade_word(word[0]))
+
+      elif 'VB' in word[1]:
+        verbs += 1
+        self.initialText = self.initialText.replace(word[0], self.upgrade_word(word[0]))
+
+    #print (self.initialText)
 
 
 
@@ -87,3 +141,7 @@ class TextAnalyzer:
       return "College"
     else:
       return "College Graduate"
+
+
+def countSyllablesInWord(word):
+  return len(''.join(c if c in "aeiouy"else' ' for c in word.rstrip('e')).split())
